@@ -43,7 +43,7 @@ bool check_size(struct direntry *dirent, struct bpb33 *bpb, uint8_t *image_buf){
         if(fat_size>meta_size && meta_size+cluster_size > fat_size){ //beyond meta_size, set eof
             set_fat_entry(prev_cluster, FAT12_MASK & CLUST_EOFS, image_buf, bpb);
         } else if (fat_size> meta_size){ //free it
-            set_fat_entry(prev_cluster, FAT12MASK & CLUST_FREE, image_buf, bpb);
+            set_fat_entry(prev_cluster, FAT12_MASK & CLUST_FREE, image_buf, bpb);
             has_size_problem = true;
         }
         cluster = get_fat_entry(prev_cluster, image_buf, bpb);
