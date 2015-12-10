@@ -34,15 +34,22 @@ bool check_size(struct direntry *dirent, struct bpb33 *bpb, uint8_t *image_buf){
     uint16_t cluster_size = bpb->bpbBytesPerSec * bpb->bpbSecPerClust;
     uint32_t fat_size = cluster_size; //
     uint16_t cluster = getushort(dirent->deStartCluster);
+    uint16_t prev_cluster = cluster;
 
     while(is_valid_cluster(cluster, bpb)){
         fat_size +=cluster_size;
-        if(fat_size>meta_size){ //this cluster is beyond meta_size, free it
-            set_fat_entry(cluster, FAT12_MASK & CLUST_FREE, image_buf, bpb);
+        prev_cluster = cluster;
+        cluster = get_fat_entry(prev_cluster, image_buf, bpb);
+        if(fat_size>meta_size && meta_size+cluster_size > fat_size){ //beyond meta_size, set eof
+            set_fat_entry(prev_cluster, FAT12_MASK & CLUST_EOFS, image_buf, bpb);
+        } else if (fat_size> meta_size){ //free it
+            set_fat_entry(prev_cluster, FAT12MASK & CLUST_FREE, image_buf, bpb);
             has_size_problem = true;
         }
-        cluster = get_fat_entry(cluster, image_buf, bpb);
+        cluster = get_fat_entry(prev_cluster, image_buf, bpb);
     }
+
+    printf("\tCalculated FAT size: %d\n", fat_size);
 
     //check conditions for meta_size in approrpiate range for cluster_size*num_clust
     if (meta_size > fat_size){
@@ -138,7 +145,14 @@ uint16_t access_dirent(struct direntry *dirent, int indent, struct bpb33 *bpb, u
 
 	size = getulong(dirent->deFileSize);
 	print_indent(indent);
-
+        printf("%s.%s (%u bytes) (starting cluster %d) %c%c%c%c\n", 
+	       name, extension, size, getushort(dirent->deStartCluster),
+	       ro?'r':' ', 
+               hidden?'h':' ', 
+               sys?'s':' ', 
+               arch?'a':' ');
+        
+        print_indent(indent);
         //check for size inconsistencies
         bool had_size_problem  = check_size(dirent, bpb, image_buf);
 
