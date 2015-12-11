@@ -33,6 +33,16 @@ void print_indent(int indent)
 	printf(" ");
 }
 
+void create_dirent(int cluster, struct bpb33 *bpb, uint8_t *image_buf){
+    /*
+    uint8_t* path = root_dir_addr(image_buf, bpb);
+    strcat((const char*) path, "/\0");
+    strcat(path,(char*) cluster);
+    mkdir(path, 0700);
+    */
+    //params f-ed up
+}
+
  // update orphan function
 void update_annie(struct bpb33 *bpb,uint8_t *image_buf){
     
