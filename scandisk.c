@@ -257,6 +257,11 @@ uint16_t access_dirent(struct direntry *dirent, int indent, struct bpb33 *bpb, u
 	// skip it
         return followclust;
     }
+    // you can't start at zero, you're a hero! #noclusterleftbehind
+    if (getushort(dirent->deStartCluster) == 0){
+        printf("Next file allocated to invalid cluster. File %s lost\n", name);
+    }
+       
 
     /* names are space padded - remove the spaces */
     for (i = 8; i > 0; i--) 
@@ -288,9 +293,10 @@ uint16_t access_dirent(struct direntry *dirent, int indent, struct bpb33 *bpb, u
     } 
     else if ((dirent->deAttributes & ATTR_DIRECTORY) != 0) 
     {
+ 
         // don't deal with hidden directories; MacOS makes these
         // for trash directories and such; just ignore them.
-	if ((dirent->deAttributes & ATTR_HIDDEN) != ATTR_HIDDEN)
+        if ((dirent->deAttributes & ATTR_HIDDEN) != ATTR_HIDDEN)
         {
 	    print_indent(indent);
     	    printf("%s/ (directory)\n", name);
