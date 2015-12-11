@@ -148,7 +148,7 @@ void create_dirent(uint16_t cluster, struct bpb33 *bpb, uint8_t *image_buf, int 
  // update orphan function
 void update_annie(struct bpb33 *bpb,uint8_t *image_buf){
     int orphan_attendance = 0; 
-    for (int i = 33; i < NUM_CLUSTERS; i++){
+    for (int i = 2; i < NUM_CLUSTERS; i++){
         if (ref_count[i] == ORPHANED){
             printf("Found Orphan! Cluster #: %d\n", i);
             orphan_attendance += 1;
