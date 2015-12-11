@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <stdbool.h>
+#include <ctype.h>
 
 #include "bootsect.h"
 #include "bpb.h"
@@ -15,16 +16,85 @@
 #include "fat.h"
 #include "dos.h"
 
+//HI PROF SOMMERS THIS IS SALLIE'S LAST PROJECT
+
 const int NUM_CLUSTERS = 2880;
 int ref_count[NUM_CLUSTERS] = {0}; 
 const int ORPHANED = -42;
-bool onetime = false;
+//bool onetime = false;
 
 
 void usage(char *progname) {
     fprintf(stderr, "usage: %s <imagename>\n", progname);
     exit(1);
 }
+
+//copy over some FUNctions from dos_cp, dos_ls
+
+
+/* write the values into a directory entry */
+void write_dirent(struct direntry *dirent, char *filename, 
+		  uint16_t start_cluster, uint32_t size)
+{
+    char *p, *p2;
+    char *uppername;
+    int len, i;
+
+    /* clean out anything old that used to be here */
+    memset(dirent, 0, sizeof(struct direntry));
+
+    /* extract just the filename part */
+    uppername = strdup(filename);
+    p2 = uppername;
+    for (i = 0; i < strlen(filename); i++) 
+    {
+	if (p2[i] == '/' || p2[i] == '\\') 
+	{
+	    uppername = p2+i+1;
+	}
+    }
+
+    /* convert filename to upper case */
+    for (i = 0; i < strlen(uppername); i++) 
+    {
+	uppername[i] = toupper(uppername[i]);
+    }
+
+    /* set the file name and extension */
+    memset(dirent->deName, ' ', 8);
+    p = strchr(uppername, '.');
+    memcpy(dirent->deExtension, "___", 3);
+    if (p == NULL) 
+    {
+	fprintf(stderr, "No filename extension given - defaulting to .___\n");
+    }
+    else 
+    {
+	*p = '\0';
+	p++;
+	len = strlen(p);
+	if (len > 3) len = 3;
+	memcpy(dirent->deExtension, p, len);
+    }
+
+    if (strlen(uppername)>8) 
+    {
+	uppername[8]='\0';
+    }
+    memcpy(dirent->deName, uppername, strlen(uppername));
+    free(p2);
+
+    /* set the attributes and file size */
+    dirent->deAttributes = ATTR_NORMAL;
+    putushort(dirent->deStartCluster, start_cluster);
+    putulong(dirent->deFileSize, size);
+
+    /* could also set time and date here if we really
+       cared... */
+}
+
+
+
 
 void print_indent(int indent)
 {
@@ -33,14 +103,47 @@ void print_indent(int indent)
 	printf(" ");
 }
 
-void create_dirent(int cluster, struct bpb33 *bpb, uint8_t *image_buf){
-    /*
-    uint8_t* path = root_dir_addr(image_buf, bpb);
-    strcat((const char*) path, "/\0");
-    strcat(path,(char*) cluster);
-    mkdir(path, 0700);
-    */
-    //params f-ed up
+
+//include a modified version of creat_dirent to label orphans
+void create_dirent(uint16_t cluster, struct bpb33 *bpb, uint8_t *image_buf, int index){
+    
+    struct direntry *dirent = (struct direntry *) root_dir_addr(image_buf, bpb);
+    char filename[64];
+    snprintf(filename, 64, "found%d", index);
+    strcat(filename, ".dat");
+    uint32_t size = 0;
+    uint16_t cluster_size = (bpb->bpbSecPerClust) * (bpb->bpbBytesPerSec);
+    uint16_t start_cluster = cluster;
+
+    while(is_valid_cluster(cluster, bpb)){
+        size+=cluster_size; //acculumate size of this chain
+        cluster = get_fat_entry(cluster, image_buf, bpb);
+    }
+
+    while (1) 
+    {
+	if (dirent->deName[0] == SLOT_EMPTY) 
+	{
+	    /* we found an empty slot at the end of the directory */
+	    write_dirent(dirent, filename, start_cluster, size);
+	    dirent++;
+
+	    /* make sure the next dirent is set to be empty, just in
+	       case it wasn't before */
+	    memset((uint8_t*)dirent, 0, sizeof(struct direntry));
+	    dirent->deName[0] = SLOT_EMPTY;
+	    return;
+	}
+
+	if (dirent->deName[0] == SLOT_DELETED) 
+	{
+	    /* we found a deleted entry - we can just overwrite it */
+	    write_dirent(dirent, filename, start_cluster, size);
+	    return;
+	}
+	dirent++;
+    }
+    printf("\tWrote Another HP to %s, #noparents\n", filename);
 }
 
  // update orphan function
