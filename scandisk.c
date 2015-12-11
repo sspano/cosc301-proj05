@@ -15,6 +15,11 @@
 #include "fat.h"
 #include "dos.h"
 
+const int NUM_CLUSTERS = 2880;
+int ref_count[NUM_CLUSTERS] = {0}; 
+const int ORPHANED = -42;
+bool onetime = false;
+
 
 void usage(char *progname) {
     fprintf(stderr, "usage: %s <imagename>\n", progname);
@@ -28,37 +33,86 @@ void print_indent(int indent)
 	printf(" ");
 }
 
+ // update orphan function
+void update_annie(struct bpb33 *bpb,uint8_t *image_buf){
+    
+    for (int i = 33; i < NUM_CLUSTERS; i++){
+        if (ref_count[i] == ORPHANED){
+            printf("Found Orphan! Cluster #: %d\n", i);
+            set_fat_entry(i, FAT12_MASK & CLUST_FREE, image_buf, bpb);
+            ref_count[i] = 0;
+            
+         //   create_dirent(i, image_buf, bpb);
+
+        }
+        else if (ref_count[i] == 0 && ((FAT12_MASK & CLUST_FREE) != get_fat_entry(i, image_buf, bpb))){
+            printf("Found enslaved (not free) Orphan! Yay! Another friend for Harry! Cluster #: %d\n", i);
+           set_fat_entry(i, FAT12_MASK & CLUST_FREE, image_buf, bpb);
+            
+            //create_dirent(i, image_buf, bpb);
+        }
+        else {
+           // printf("I'm okay! Cluster # %d\n", i);
+        }
+    }
+}
+
 bool check_size(struct direntry *dirent, struct bpb33 *bpb, uint8_t *image_buf){
     int meta_size = getulong(dirent->deFileSize);
     bool has_size_problem = false;
     uint16_t cluster_size = bpb->bpbBytesPerSec * bpb->bpbSecPerClust;
-    uint32_t fat_size = cluster_size; //
+    uint32_t fat_size = 0; // why did why initialize to cluster size?
     uint16_t cluster = getushort(dirent->deStartCluster);
     uint16_t prev_cluster = cluster;
 
+    //printf("\tCluster Size (%d bytes)\n",(int) cluster_size);
+
     while(is_valid_cluster(cluster, bpb)){
         fat_size +=cluster_size;
+        ref_count[cluster] += 1;
         prev_cluster = cluster;
         cluster = get_fat_entry(prev_cluster, image_buf, bpb);
+       
+     
         if(fat_size>meta_size && meta_size+cluster_size > fat_size){ //beyond meta_size, set eof
             set_fat_entry(prev_cluster, FAT12_MASK & CLUST_EOFS, image_buf, bpb);
         } else if (fat_size> meta_size){ //free it
-            set_fat_entry(prev_cluster, FAT12_MASK & CLUST_FREE, image_buf, bpb);
+            ref_count[prev_cluster] = ORPHANED; 
             has_size_problem = true;
         }
-        cluster = get_fat_entry(prev_cluster, image_buf, bpb);
     }
 
     printf("\tCalculated FAT size: %d\n", fat_size);
+    printf("\tMeta Size - FAT size: %d\n",(int) (meta_size - fat_size));
+    
+    // NEW TEST BEGIN
+    if (has_size_problem){
+        int fat_size1 = 0;
+        cluster = getushort(dirent->deStartCluster);
+        while(is_valid_cluster(cluster, bpb)){
+            fat_size1 +=cluster_size;
+            prev_cluster = cluster;
+            cluster = get_fat_entry(prev_cluster, image_buf, bpb);
+        }
+        printf("\tFat size after fix: (%d bytes)\n", fat_size1);
+   
+    }
 
+ // NEW TEST END
+
+  
+    
     //check conditions for meta_size in approrpiate range for cluster_size*num_clust
     if (meta_size > fat_size){
+        printf("\tMetasize Before: %d\n", meta_size);
         putulong(dirent->deFileSize, fat_size);
+        printf("\tMetasize After: %d\n", getulong(dirent->deFileSize));
         has_size_problem = true;
         return has_size_problem;
     } else { //no modifications necessary
         return has_size_problem; 
     }
+
 }
 
 uint16_t access_dirent(struct direntry *dirent, int indent, struct bpb33 *bpb, uint8_t *image_buf)
@@ -130,6 +184,7 @@ uint16_t access_dirent(struct direntry *dirent, int indent, struct bpb33 *bpb, u
     	    printf("%s/ (directory)\n", name);
             file_cluster = getushort(dirent->deStartCluster);
             followclust = file_cluster;
+            ref_count[(int) file_cluster] += 1;
         }
     }
     else 
@@ -157,8 +212,8 @@ uint16_t access_dirent(struct direntry *dirent, int indent, struct bpb33 *bpb, u
         bool had_size_problem  = check_size(dirent, bpb, image_buf);
 
         if(had_size_problem){
-	    printf("%s.%s (%u bytes) (starting cluster %d) %c%c%c%c\n", 
-	       name, extension, size, getushort(dirent->deStartCluster),
+	   printf("Detected size problem with %s.%s (%u bytes) (starting cluster %d) %c%c%c%c\n", 
+	       name, extension, getulong(dirent->deFileSize), getushort(dirent->deStartCluster),
 	       ro?'r':' ', 
                hidden?'h':' ', 
                sys?'s':' ', 
@@ -209,7 +264,7 @@ void traverse_root(uint8_t *image_buf, struct bpb33* bpb)
     }
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv){  
     uint8_t *image_buf;
     int fd;
     struct bpb33* bpb;
@@ -231,7 +286,11 @@ int main(int argc, char** argv) {
     //deFileSize in direntry
     //get_fat_entry until EOF or BAD to find cluster size to compare
 
+
     traverse_root(image_buf, bpb); //this call will execute checks inside print_dirent
+ // update orphan function
+    update_annie(bpb,image_buf);
+
 
     unmmap_file(image_buf, &fd);
     return 0;

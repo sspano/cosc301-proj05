@@ -204,7 +204,7 @@ void do_cat(struct direntry *dirent, uint8_t *image_buf, struct bpb33 *bpb)
     uint16_t cluster = getushort(dirent->deStartCluster);
     uint32_t bytes_remaining = getulong(dirent->deFileSize);
     uint16_t cluster_size = bpb->bpbBytesPerSec * bpb->bpbSecPerClust;
-
+    
     char buffer[MAXFILENAME];
     get_dirent(dirent, buffer);
 
