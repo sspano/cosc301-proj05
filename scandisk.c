@@ -127,7 +127,7 @@ void create_dirent(uint16_t cluster, struct bpb33 *bpb, uint8_t *image_buf, int 
 	    /* we found an empty slot at the end of the directory */
 	    write_dirent(dirent, filename, start_cluster, size);
 	    dirent++;
-
+            printf("\tWrote HP to %s, #noparents\n", filename);
 	    /* make sure the next dirent is set to be empty, just in
 	       case it wasn't before */
 	    memset((uint8_t*)dirent, 0, sizeof(struct direntry));
@@ -143,26 +143,25 @@ void create_dirent(uint16_t cluster, struct bpb33 *bpb, uint8_t *image_buf, int 
 	}
 	dirent++;
     }
-    printf("\tWrote Another HP to %s, #noparents\n", filename);
 }
 
  // update orphan function
 void update_annie(struct bpb33 *bpb,uint8_t *image_buf){
-    
+    int orphan_attendance = 0; 
     for (int i = 33; i < NUM_CLUSTERS; i++){
         if (ref_count[i] == ORPHANED){
             printf("Found Orphan! Cluster #: %d\n", i);
+            orphan_attendance += 1;
             set_fat_entry(i, FAT12_MASK & CLUST_FREE, image_buf, bpb);
             ref_count[i] = 0;
-            
-         //   create_dirent(i, image_buf, bpb);
+            create_dirent(i, bpb, image_buf, orphan_attendance);
 
         }
         else if (ref_count[i] == 0 && ((FAT12_MASK & CLUST_FREE) != get_fat_entry(i, image_buf, bpb))){
             printf("Found enslaved (not free) Orphan! Yay! Another friend for Harry! Cluster #: %d\n", i);
-           set_fat_entry(i, FAT12_MASK & CLUST_FREE, image_buf, bpb);
-            
-            //create_dirent(i, image_buf, bpb);
+            orphan_attendance += 1;
+            set_fat_entry(i, FAT12_MASK & CLUST_FREE, image_buf, bpb);
+            create_dirent(i, bpb, image_buf, orphan_attendance);
         }
         else {
            // printf("I'm okay! Cluster # %d\n", i);
