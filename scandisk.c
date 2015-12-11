@@ -259,7 +259,8 @@ uint16_t access_dirent(struct direntry *dirent, int indent, struct bpb33 *bpb, u
     }
     // you can't start at zero, you're a hero! #noclusterleftbehind
     if (getushort(dirent->deStartCluster) == 0){
-        printf("Next file allocated to invalid cluster. File %s lost\n", name);
+        printf("File allocated to invalid cluster. File %s lost\n", name);
+        return followclust;
     }
        
 
